@@ -1,0 +1,111 @@
+# --------------------------------------------
+# Credit Card Fraud Detection - Complete Script
+# --------------------------------------------
+
+# Step 0: Import Libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier, IsolationForest
+from sklearn.metrics import confusion_matrix, classification_report, roc_auc_score
+
+# --------------------------------------------
+# Step 1: Load Dataset
+# --------------------------------------------
+data = pd.read_csv('creditcard.csv')  # make sure the CSV is in your working folder
+print("Dataset Loaded Successfully")
+print(data.head())
+
+# --------------------------------------------
+# Step 2: Data Preprocessing
+# --------------------------------------------
+# Scale 'Amount' column
+scaler = StandardScaler()
+data['Amount_scaled'] = scaler.fit_transform(data['Amount'].values.reshape(-1,1))
+
+# Drop original 'Amount' and 'Time'
+data = data.drop(['Amount','Time'], axis=1)
+
+# Features and target
+X = data.drop('Class', axis=1)
+y = data['Class']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+print("Data Preprocessing Completed")
+print(f"Training samples: {X_train.shape[0]}, Testing samples: {X_test.shape[0]}")
+
+# --------------------------------------------
+# Step 3: Exploratory Data Analysis (Optional)
+# --------------------------------------------
+sns.countplot(x='Class', data=data)
+plt.title('Class Distribution: Fraud vs Normal')
+plt.show()
+
+print(f"Fraudulent transactions: {len(data[data['Class']==1])}")
+print(f"Normal transactions: {len(data[data['Class']==0])}")
+
+# --------------------------------------------
+# Step 4: Supervised Model - Random Forest
+# --------------------------------------------
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X_train, y_train)
+
+# Predictions
+y_pred = rf.predict(X_test)
+y_prob = rf.predict_proba(X_test)[:,1]
+
+# Evaluation
+print("\n--- Supervised Model (Random Forest) ---")
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+print("ROC-AUC Score:", roc_auc_score(y_test, y_prob))
+
+# --------------------------------------------
+# Step 5: Unsupervised Model - Isolation Forest
+# --------------------------------------------
+iso_forest = IsolationForest(contamination=0.00172, random_state=42)
+iso_forest.fit(X_train)
+
+# Predict anomalies
+y_pred_if = iso_forest.predict(X_test)
+# Convert -1 (anomaly) to 1 (fraud), 1 (normal) to 0
+y_pred_if = [1 if x==-1 else 0 for x in y_pred_if]
+
+# Evaluation
+print("\n--- Unsupervised Model (Isolation Forest) ---")
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred_if))
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred_if))
+
+# --------------------------------------------
+# Step 6: Real-Time Detection Simulation
+# --------------------------------------------
+print("\n--- Real-Time Detection Simulation ---")
+new_transactions = X_test.sample(5, random_state=42)  # simulate 5 incoming transactions
+predictions = rf.predict(new_transactions)
+pred_probs = rf.predict_proba(new_transactions)[:,1]
+
+for i, prob in enumerate(pred_probs):
+    status = "FRAUD" if predictions[i]==1 else "Normal"
+    print(f"Transaction {i+1}: Risk Probability={prob:.2f} → {status}")
+
+# --------------------------------------------
+# Step 7: Visualize Predicted Frauds
+# --------------------------------------------
+predicted_frauds = X_test[y_pred==1]
+plt.figure(figsize=(10,5))
+sns.histplot(predicted_frauds['V1'], bins=50, color='red', label='Predicted Fraud')
+plt.title("Distribution of Predicted Fraud Transactions (Feature V1)")
+plt.legend()
+plt.show()
